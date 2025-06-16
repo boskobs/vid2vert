@@ -1,0 +1,17 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "vid2vert",
+  "outputfilename": "vid2vert",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "boskobs",
+    "email": "boskobs@gmail.com"
+  },
+  "info": {
+    "version": "1.0",
+    "license": "MIT"
+  }
+}

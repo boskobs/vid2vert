@@ -1,0 +1,93 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            os: linux
+          - arch: amd64
+            os: windows
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.4'
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install Wails CLI
+        run: |
+          go install github.com/wailsapp/wails/v2/cmd/wails@latest
+      - name: Install wails dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc libgtk-3-dev libwebkit2gtk-4.1-dev
+      - name: Install npm dependencies
+        run: |
+          cd frontend; npm install
+      - name: Build for ${{ matrix.os }}-${{ matrix.arch }}
+        run: |
+          if [ "${{ matrix.os }}" = "windows" ]; then
+            GOOS=windows GOARCH=amd64 wails build -tags webkit2_41 -skipbindings
+            mv build/bin/vid2vert.exe build/bin/vid2vert-${{ matrix.os }}-${{ matrix.arch }}.exe
+          else
+            GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} wails build -tags webkit2_41
+            mv build/bin/vid2vert build/bin/vid2vert-${{ matrix.os }}-${{ matrix.arch }}
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vid2vert-${{ matrix.os }}-${{ matrix.arch }}
+          path: |
+            build/bin/vid2vert-${{ matrix.os }}-${{ matrix.arch }}*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts/
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          files: |
+            ./artifacts/vid2vert-linux-amd64/vid2vert-linux-amd64
+            ./artifacts/vid2vert-windows-amd64/vid2vert-windows-amd64.exe
+      - name: Create/Update GitHub release for latest tag
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Release latest
+          files: |
+            ./artifacts/vid2vert-linux-amd64/vid2vert-linux-amd64
+            ./artifacts/vid2vert-windows-amd64/vid2vert-windows-amd64.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Needed to push tags
+      - name: Set up Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+      - name: Move latest tag to this commit
+        run: |
+          git tag -f latest ${{ github.sha }}
+          git push -f origin latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
